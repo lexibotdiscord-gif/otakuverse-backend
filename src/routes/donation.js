@@ -118,8 +118,18 @@ router.post('/stripe/create-intent', async (req, res) => {
   try {
     const { amount, currency = 'usd', description, donorEmail } = req.body;
 
+    console.log('📦 Create Intent Request:', { amount, currency, donorEmail });
+    console.log('🔑 Stripe Key Present:', !!process.env.STRIPE_SECRET_KEY);
+
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ 
+        error: 'STRIPE_SECRET_KEY not configured',
+        message: 'Missing STRIPE_SECRET_KEY environment variable'
+      });
     }
 
     const paymentIntent = await stripe.paymentIntents.create({
@@ -129,14 +139,21 @@ router.post('/stripe/create-intent', async (req, res) => {
       receipt_email: donorEmail
     });
 
+    console.log('✅ Payment Intent Created:', paymentIntent.id);
+
     res.status(200).json({
       clientSecret: paymentIntent.client_secret,
       id: paymentIntent.id,
       amount: paymentIntent.amount / 100
     });
   } catch (error) {
+    console.error('❌ Stripe Error:', error.message);
     logger.error('Create payment intent error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      type: error.type,
+      code: error.code
+    });
   }
 });
 
