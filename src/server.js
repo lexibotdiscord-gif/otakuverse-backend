@@ -19,6 +19,9 @@ const PORT = process.env.PORT || 5000;
 
 // ============== MIDDLEWARE ==============
 
+// Trust proxy (importante per Render)
+app.set('trust proxy', 1);
+
 // CORS
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
