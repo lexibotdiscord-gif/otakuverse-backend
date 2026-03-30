@@ -1,0 +1,15 @@
+{"level":"warn","message":"⚠️ MongoDB connection failed:","service":"otakuverse-api","timestamp":"2026-03-29 15:41:12"}
+{"level":"warn","message":"Running without database - mock mode enabled","service":"otakuverse-api","timestamp":"2026-03-29 15:41:12"}
+{"level":"info","message":"🚀 OtakuVerse Backend started at port 5000","service":"otakuverse-api","timestamp":"2026-03-29 15:41:12"}
+{"level":"info","message":"📡 Environment: undefined","service":"otakuverse-api","timestamp":"2026-03-29 15:41:12"}
+{"level":"info","message":"🔗 API URL: http://localhost:5000","service":"otakuverse-api","timestamp":"2026-03-29 15:41:12"}
+{"level":"warn","message":"⚠️ MongoDB connection failed:","service":"otakuverse-api","timestamp":"2026-03-29 15:41:13"}
+{"level":"warn","message":"Running without database - mock mode enabled","service":"otakuverse-api","timestamp":"2026-03-29 15:41:13"}
+{"level":"info","message":"🚀 OtakuVerse Backend started at port 5000","service":"otakuverse-api","timestamp":"2026-03-29 15:41:13"}
+{"level":"info","message":"📡 Environment: undefined","service":"otakuverse-api","timestamp":"2026-03-29 15:41:13"}
+{"level":"info","message":"🔗 API URL: http://localhost:5000","service":"otakuverse-api","timestamp":"2026-03-29 15:41:13"}
+{"level":"warn","message":"⚠️ MongoDB connection failed:","service":"otakuverse-api","timestamp":"2026-03-29 16:45:13"}
+{"level":"warn","message":"Running without database - mock mode enabled","service":"otakuverse-api","timestamp":"2026-03-29 16:45:13"}
+{"level":"info","message":"🚀 OtakuVerse Backend started at port 5000","service":"otakuverse-api","timestamp":"2026-03-29 16:45:13"}
+{"level":"info","message":"📡 Environment: undefined","service":"otakuverse-api","timestamp":"2026-03-29 16:45:13"}
+{"level":"info","message":"🔗 API URL: http://localhost:5000","service":"otakuverse-api","timestamp":"2026-03-29 16:45:13"}
