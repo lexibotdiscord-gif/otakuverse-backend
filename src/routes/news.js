@@ -1,67 +1,52 @@
 import express from 'express';
+import axios from 'axios';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
 
-// Mock news data
-const mockNews = [
-  {
-    id: 1,
-    title: "Demon Slayer Season 4 Announced",
-    description: "Official announcement of the fourth season coming in 2025. Director Haruo Sotozaki returns.",
-    imageUrl: "https://via.placeholder.com/400x300?text=Demon+Slayer+S4",
-    releaseDate: new Date("2025-01-15"),
-    category: "Anime",
-    authorId: "admin",
-    viewCount: 5420,
-    likeCount: 320,
-    isBreakingNews: true
-  },
-  {
-    id: 2,
-    title: "Jujutsu Kaisen Movie Box Office Record",
-    description: "The latest Jujutsu Kaisen movie breaks box office records worldwide with gross exceeding $100 million.",
-    imageUrl: "https://via.placeholder.com/400x300?text=Jujutsu+Kaisen+Movie",
-    releaseDate: new Date("2025-01-10"),
-    category: "News",
-    authorId: "admin",
-    viewCount: 3210,
-    likeCount: 245
-  },
-  {
-    id: 3,
-    title: "Attack on Titan Final Arc Visual Released",
-    description: "New visual and trailer for the final arc of Attack on Titan released. Studio MAPPA confirmed.",
-    imageUrl: "https://via.placeholder.com/400x300?text=Attack+on+Titan",
-    releaseDate: new Date("2025-01-08"),
-    category: "Anime",
-    authorId: "admin",
-    viewCount: 8900,
-    likeCount: 512
-  },
-  {
-    id: 4,
-    title: "Chainsaw Man Manga New Chapter",
-    description: "Latest Chainsaw Man chapter released with major plot revelations. Fans speculate on anime adaptation.",
-    imageUrl: "https://via.placeholder.com/400x300?text=Chainsaw+Man",
-    releaseDate: new Date("2025-01-05"),
-    category: "Manga",
-    authorId: "admin",
-    viewCount: 6750,
-    likeCount: 445
-  },
-  {
-    id: 5,
-    title: "Spy x Family Final Arc Announced",
-    description: "Studio CloverWorks announces final arc adaptation for Spy x Family anime series.",
-    imageUrl: "https://via.placeholder.com/400x300?text=Spy+x+Family",
-    releaseDate: new Date("2025-01-03"),
-    category: "Anime",
-    authorId: "admin",
-    viewCount: 4320,
-    likeCount: 298
+const JIKAN_API = 'https://api.jikan.moe/v4';
+
+// Cache per le notizie (10 minuti)
+let newsCache = [];
+let cacheTime = 0;
+
+// Genera notizie da anime reali di Jikan API
+const generateNewsFromAnime = async () => {
+  try {
+    const now = Date.now();
+    // Se il cache è fresco (meno di 10 minuti), restituiscilo
+    if (newsCache.length > 0 && now - cacheTime < 10 * 60 * 1000) {
+      return newsCache;
+    }
+
+    const response = await axios.get(`${JIKAN_API}/top/anime`, {
+      params: { limit: 25, page: 1 }
+    });
+
+    const animeList = response.data.data || [];
+    
+    const generatedNews = animeList.slice(0, 10).map((anime, index) => ({
+      id: index + 1,
+      title: `${anime.title} - Top Anime Rating: ${anime.score}`,
+      description: anime.synopsis ? anime.synopsis.substring(0, 200) + '...' : 'New anime announcement',
+      imageUrl: anime.images?.jpg?.image_url || 'https://via.placeholder.com/400x300?text=Anime',
+      releaseDate: anime.aired?.from ? new Date(anime.aired.from) : new Date(),
+      category: anime.type === 'TV' ? 'Anime' : anime.type === 'Movie' ? 'Movie' : 'Manga',
+      authorId: 'admin',
+      viewCount: Math.floor(Math.random() * 10000),
+      likeCount: Math.floor(Math.random() * 500),
+      isBreakingNews: index === 0
+    }));
+
+    newsCache = generatedNews;
+    cacheTime = now;
+
+    return newsCache;
+  } catch (error) {
+    logger.error('Error fetching anime data:', error.message);
+    return newsCache;
   }
-];
+};
 
 // ============== NEWS ENDPOINTS ==============
 
@@ -73,7 +58,7 @@ router.get('/', async (req, res) => {
     const category = req.query.category;
     const sort = req.query.sort || 'latest';
 
-    let filtered = mockNews;
+    let filtered = await generateNewsFromAnime();
     
     if (category) {
       filtered = filtered.filter(news => news.category === category);
@@ -111,7 +96,8 @@ router.get('/', async (req, res) => {
 // Get breaking news
 router.get('/breaking', async (req, res) => {
   try {
-    const breakingNews = mockNews.filter(news => news.isBreakingNews);
+    const allNews = await generateNewsFromAnime();
+    const breakingNews = allNews.filter(news => news.isBreakingNews);
     res.status(200).json({ data: breakingNews });
   } catch (error) {
     logger.error('Get breaking news error:', error);
@@ -125,7 +111,8 @@ router.get('/search/:query', async (req, res) => {
     const { query } = req.params;
     const lowerQuery = query.toLowerCase();
     
-    const results = mockNews.filter(news => 
+    const allNews = await generateNewsFromAnime();
+    const results = allNews.filter(news => 
       news.title.toLowerCase().includes(lowerQuery) ||
       news.description.toLowerCase().includes(lowerQuery)
     );
@@ -136,6 +123,5 @@ router.get('/search/:query', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 export default router;
