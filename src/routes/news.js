@@ -137,27 +137,5 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
-export default router;
-
-// Get news by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const news = await News.findByIdAndUpdate(
-      id,
-      { $inc: { viewCount: 1 } },
-      { new: true }
-    ).populate('authorId', 'username avatar');
-
-    if (!news) {
-      return res.status(404).json({ error: 'News not found' });
-    }
-
-    res.status(200).json({ data: news });
-  } catch (error) {
-    logger.error('Get news by ID error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 export default router;
