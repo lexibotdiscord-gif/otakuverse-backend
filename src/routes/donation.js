@@ -120,9 +120,22 @@ router.post('/stripe/create-intent', async (req, res) => {
 
     console.log('📦 Create Intent Request:', { amount, currency, donorEmail });
     console.log('🔑 Stripe Key Present:', !!process.env.STRIPE_SECRET_KEY);
+    console.log('🔑 Stripe Key Format:', process.env.STRIPE_SECRET_KEY?.substring(0, 10) + '...');
 
+    // Validazione amount
     if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
+      return res.status(400).json({ error: 'Invalid amount', amount });
+    }
+
+    // Validazione currency
+    const validCurrencies = ['usd', 'eur', 'gbp', 'jpy', 'aud'];
+    if (!validCurrencies.includes(currency.toLowerCase())) {
+      return res.status(400).json({ error: 'Invalid currency', currency });
+    }
+
+    // Validazione email
+    if (!donorEmail || !donorEmail.includes('@')) {
+      return res.status(400).json({ error: 'Invalid email', donorEmail });
     }
 
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -132,9 +145,20 @@ router.post('/stripe/create-intent', async (req, res) => {
       });
     }
 
+    // Check se la chiave è valida (deve iniziare con sk_test_ o sk_live_)
+    if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
+      return res.status(500).json({ 
+        error: 'Invalid STRIPE_SECRET_KEY format',
+        message: 'STRIPE_SECRET_KEY must start with sk_test_ or sk_live_'
+      });
+    }
+
+    const amountInCents = Math.round(amount * 100);
+    console.log('💰 Payment details:', { amountInCents, currency, donorEmail });
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Stripe usa centesimi
-      currency,
+      amount: amountInCents,
+      currency: currency.toLowerCase(),
       description: description || 'OtakuVerse Donation',
       receipt_email: donorEmail
     });
@@ -147,12 +171,27 @@ router.post('/stripe/create-intent', async (req, res) => {
       amount: paymentIntent.amount / 100
     });
   } catch (error) {
-    console.error('❌ Stripe Error:', error.message);
-    logger.error('Create payment intent error:', error);
-    res.status(500).json({ 
+    console.error('❌ Stripe Error Complete:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      statusCode: error.statusCode,
+      raw: error.raw?.message || 'No raw message',
+      param: error.param
+    });
+    logger.error('Create payment intent error:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      statusCode: error.statusCode,
+      param: error.param
+    });
+    
+    res.status(error.statusCode || 500).json({ 
       error: error.message,
       type: error.type,
-      code: error.code
+      code: error.code,
+      statusCode: error.statusCode
     });
   }
 });
