@@ -6,18 +6,12 @@ import Stripe from 'stripe';
 
 const router = express.Router();
 
-// Configura Stripe con timeout e retry
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_fake', {
-  maxNetworkRetries: 3,
-  timeout: 30000, // 30 secondi
-  apiVersion: '2023-10-16',
-  telemetry: false
-});
+// Configura Stripe - versione semplificata senza config problematica
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_fake');
 
-console.log('🔐 Stripe initialized with:');
-console.log('  - Max retries: 3');
-console.log('  - Timeout: 30s');
-console.log('  - Key format:', process.env.STRIPE_SECRET_KEY?.substring(0, 10) + '...');
+console.log('🔐 Stripe inizializzato');
+console.log('🔑 Stripe Key Present:', !!process.env.STRIPE_SECRET_KEY);
+console.log('🔑 Key Format:', process.env.STRIPE_SECRET_KEY?.substring(0, 10) + '...');
 
 // ============== DONATION ENDPOINTS ==============
 
