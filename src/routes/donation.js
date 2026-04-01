@@ -335,4 +335,93 @@ router.post('/stripe/confirm', async (req, res) => {
   }
 });
 
+// Create Stripe Checkout Session (per WebView payment)
+router.post('/stripe/checkout-session', async (req, res) => {
+  try {
+    const { amount, level, donorEmail, label } = req.body;
+
+    console.log('🛒 Create Checkout Session:', { amount, level, donorEmail });
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    if (!donorEmail || !donorEmail.includes('@')) {
+      return res.status(400).json({ error: 'Invalid email' });
+    }
+
+    const amountInCents = Math.round(amount * 100);
+
+    // URL di callback dopo il pagamento (deve essere il tuo sito/app)
+    const successUrl = `http://localhost:5000/api/donations/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `http://localhost:5000/api/donations/cancel`;
+
+    const checkoutSession = await stripeAPI('POST', '/checkout/sessions', {
+      payment_method_types: 'card',
+      line_items: JSON.stringify([{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `OtakuVerse ${level || 'Donation'} Tier`,
+            description: 'Support OtakuVerse anime news platform'
+          },
+          unit_amount: amountInCents
+        },
+        quantity: 1
+      }]),
+      mode: 'payment',
+      customer_email: donorEmail,
+      success_url: successUrl,
+      cancel_url: cancelUrl
+    });
+
+    console.log('✅ Checkout Session Created:', checkoutSession.id);
+
+    res.status(200).json({
+      checkoutUrl: checkoutSession.url,
+      sessionId: checkoutSession.id,
+      amount: amount
+    });
+  } catch (error) {
+    console.error('❌ Checkout session error:', error.message || error);
+    logger.error('Create checkout session error:', error);
+    
+    res.status(500).json({ 
+      error: error.message || error,
+      details: 'Checkout session creation failed'
+    });
+  }
+});
+
+// Success callback (chiamato dopo pagamento riuscito)
+router.get('/success', async (req, res) => {
+  try {
+    const { session_id } = req.query;
+    console.log('✅ Success callback - Session:', session_id);
+
+    const session = await stripeAPI('GET', `/checkout/sessions/${session_id}`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Payment successful',
+      sessionId: session_id,
+      paymentStatus: session.payment_status,
+      amount: session.amount_total / 100,
+      email: session.customer_email
+    });
+  } catch (error) {
+    console.error('❌ Success callback error:', error.message || error);
+    res.status(500).json({ error: error.message || error });
+  }
+});
+
+// Cancel callback (chiamato se l'utente annulla il pagamento)
+router.get('/cancel', async (req, res) => {
+  console.log('❌ Payment cancelled by user');
+  
+  res.status(200).json({
+    success: false,
+    message: 'Payment cancelled'
+  });
+});
+
 export default router;
