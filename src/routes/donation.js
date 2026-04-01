@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import qs from 'qs';
 import Donation from '../models/Donation.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
@@ -27,7 +28,8 @@ const stripeAPI = async (method, endpoint, data = null) => {
     };
 
     if (data) {
-      config.data = new URLSearchParams(data).toString();
+      // Usa qs per serializzare correttamente gli array per Stripe
+      config.data = qs.stringify(data);
     }
 
     const response = await axios(config);
