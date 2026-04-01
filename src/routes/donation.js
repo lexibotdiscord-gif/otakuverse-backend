@@ -1,17 +1,41 @@
 import express from 'express';
+import axios from 'axios';
 import Donation from '../models/Donation.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
-import Stripe from 'stripe';
 
 const router = express.Router();
 
-// Configura Stripe - versione semplificata senza config problematica
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_fake');
+// Stripe API base URL
+const STRIPE_API_URL = 'https://api.stripe.com/v1';
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_fake';
 
-console.log('🔐 Stripe inizializzato');
-console.log('🔑 Stripe Key Present:', !!process.env.STRIPE_SECRET_KEY);
-console.log('🔑 Key Format:', process.env.STRIPE_SECRET_KEY?.substring(0, 10) + '...');
+console.log('🔐 Stripe inizializzato (axios mode)');
+console.log('🔑 Stripe Key Present:', !!STRIPE_KEY);
+console.log('🔑 Key Format:', STRIPE_KEY?.substring(0, 10) + '...');
+
+// Helper function per Stripe API calls
+const stripeAPI = async (method, endpoint, data = null) => {
+  try {
+    const config = {
+      method,
+      url: `${STRIPE_API_URL}${endpoint}`,
+      headers: {
+        'Authorization': `Bearer ${STRIPE_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    };
+
+    if (data) {
+      config.data = new URLSearchParams(data).toString();
+    }
+
+    const response = await axios(config);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+};
 
 // ============== DONATION ENDPOINTS ==============
 
@@ -122,7 +146,7 @@ router.get('/top/donors', async (req, res) => {
 router.get('/stripe/test-connection', async (req, res) => {
   try {
     console.log('🔗 Testing Stripe connection...');
-    const account = await stripe.account.retrieve();
+    const account = await stripeAPI('GET', '/account');
     console.log('✅ Stripe connection successful!');
     res.status(200).json({
       status: 'connected',
@@ -130,11 +154,10 @@ router.get('/stripe/test-connection', async (req, res) => {
       account: account.id
     });
   } catch (error) {
-    console.error('❌ Stripe connection test failed:', error.message);
+    console.error('❌ Stripe connection test failed:', error.message || error);
     res.status(500).json({
       status: 'disconnected',
-      error: error.message,
-      type: error.type,
+      error: error.message || error,
       suggestions: [
         'Check internet connection',
         'Verify STRIPE_SECRET_KEY is correct',
@@ -151,8 +174,8 @@ router.post('/stripe/create-intent', async (req, res) => {
     const { amount, currency = 'usd', description, donorEmail } = req.body;
 
     console.log('📦 Create Intent Request:', { amount, currency, donorEmail });
-    console.log('🔑 Stripe Key Present:', !!process.env.STRIPE_SECRET_KEY);
-    console.log('🔑 Stripe Key Format:', process.env.STRIPE_SECRET_KEY?.substring(0, 10) + '...');
+    console.log('🔑 Stripe Key Present:', !!STRIPE_KEY);
+    console.log('🔑 Stripe Key Format:', STRIPE_KEY?.substring(0, 10) + '...');
 
     // Validazione amount
     if (!amount || amount <= 0) {
@@ -170,7 +193,7 @@ router.post('/stripe/create-intent', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email', donorEmail });
     }
 
-    if (!process.env.STRIPE_SECRET_KEY) {
+    if (!STRIPE_KEY || STRIPE_KEY === 'sk_test_fake') {
       return res.status(500).json({ 
         error: 'STRIPE_SECRET_KEY not configured',
         message: 'Missing STRIPE_SECRET_KEY environment variable'
@@ -178,7 +201,7 @@ router.post('/stripe/create-intent', async (req, res) => {
     }
 
     // Check se la chiave è valida (deve iniziare con sk_test_ o sk_live_)
-    if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
+    if (!STRIPE_KEY.startsWith('sk_')) {
       return res.status(500).json({ 
         error: 'Invalid STRIPE_SECRET_KEY format',
         message: 'STRIPE_SECRET_KEY must start with sk_test_ or sk_live_'
@@ -188,7 +211,8 @@ router.post('/stripe/create-intent', async (req, res) => {
     const amountInCents = Math.round(amount * 100);
     console.log('💰 Payment details:', { amountInCents, currency, donorEmail });
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Crea payment intent via Stripe API
+    const paymentIntent = await stripeAPI('POST', '/payment_intents', {
       amount: amountInCents,
       currency: currency.toLowerCase(),
       description: description || 'OtakuVerse Donation',
@@ -204,38 +228,15 @@ router.post('/stripe/create-intent', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Stripe Error Complete:', {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      statusCode: error.statusCode,
-      raw: error.raw?.message || 'No raw message',
-      param: error.param
+      message: error.message || error,
+      type: error.type || 'Unknown'
     });
 
-    // Se è un errore di connessione, suggerisci il check della rete
-    if (error.type === 'StripeConnectionError') {
-      console.error('⚠️ Connection issue detected! Checking network...');
-      logger.warn('Stripe Connection Error - may be network/firewall issue');
-    }
-
-    logger.error('Create payment intent error:', {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      statusCode: error.statusCode,
-      param: error.param
-    });
+    logger.error('Create payment intent error:', error);
     
-    // Ritorna lo status code appropriato
-    const httpStatus = error.statusCode || 500;
-    res.status(httpStatus).json({ 
-      error: error.message,
-      type: error.type,
-      code: error.code,
-      statusCode: httpStatus,
-      details: error.type === 'StripeConnectionError' ? 
-        'Network connection issue with Stripe. Check firewall/proxy settings.' : 
-        'Payment processing error'
+    res.status(500).json({ 
+      error: error.message || error,
+      details: 'Payment processing error - please try again'
     });
   }
 });
@@ -245,7 +246,7 @@ router.post('/stripe/confirm', async (req, res) => {
   try {
     const { paymentIntentId, userId, donorEmail, donorName, amount, level } = req.body;
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await stripeAPI('GET', `/payment_intents/${paymentIntentId}`);
 
     if (paymentIntent.status === 'succeeded') {
       // Salva nel database se usiamo MongoDB
@@ -283,7 +284,7 @@ router.post('/stripe/confirm', async (req, res) => {
     }
   } catch (error) {
     logger.error('Confirm donation error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message || error });
   }
 });
 
