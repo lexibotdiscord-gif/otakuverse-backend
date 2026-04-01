@@ -358,18 +358,12 @@ router.post('/stripe/checkout-session', async (req, res) => {
     const cancelUrl = `http://localhost:5000/api/donations/cancel`;
 
     const checkoutSession = await stripeAPI('POST', '/checkout/sessions', {
-      payment_method_types: 'card',
-      line_items: JSON.stringify([{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `OtakuVerse ${level || 'Donation'} Tier`,
-            description: 'Support OtakuVerse anime news platform'
-          },
-          unit_amount: amountInCents
-        },
-        quantity: 1
-      }]),
+      'payment_method_types[0]': 'card',
+      'line_items[0][price_data][currency]': 'usd',
+      'line_items[0][price_data][product_data][name]': `OtakuVerse ${level || 'Donation'} Tier`,
+      'line_items[0][price_data][product_data][description]': 'Support OtakuVerse anime news platform',
+      'line_items[0][price_data][unit_amount]': amountInCents,
+      'line_items[0][quantity]': 1,
       mode: 'payment',
       customer_email: donorEmail,
       success_url: successUrl,
