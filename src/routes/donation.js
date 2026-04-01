@@ -246,7 +246,37 @@ router.post('/stripe/confirm', async (req, res) => {
   try {
     const { paymentIntentId, userId, donorEmail, donorName, amount, level } = req.body;
 
+    console.log('📋 Confirm Donation Request:', {
+      paymentIntentId,
+      userId,
+      donorEmail,
+      donorName,
+      amount,
+      level,
+      bodyKeys: Object.keys(req.body)
+    });
+
+    // Validazione base
+    if (!paymentIntentId) {
+      return res.status(400).json({ error: 'paymentIntentId is required' });
+    }
+    if (!donorEmail) {
+      return res.status(400).json({ error: 'donorEmail is required' });
+    }
+    if (!donorName) {
+      return res.status(400).json({ error: 'donorName is required' });
+    }
+    if (!amount) {
+      return res.status(400).json({ error: 'amount is required' });
+    }
+
     const paymentIntent = await stripeAPI('GET', `/payment_intents/${paymentIntentId}`);
+
+    console.log('✅ Payment Intent Retrieved:', {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: paymentIntent.amount
+    });
 
     if (paymentIntent.status === 'succeeded') {
       // Salva nel database se usiamo MongoDB
@@ -283,6 +313,10 @@ router.post('/stripe/confirm', async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('❌ Confirm donation error:', {
+      message: error.message || error,
+      type: error.type || 'Unknown'
+    });
     logger.error('Confirm donation error:', error);
     res.status(500).json({ error: error.message || error });
   }
