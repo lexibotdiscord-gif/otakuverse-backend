@@ -6,7 +6,18 @@ import Stripe from 'stripe';
 
 const router = express.Router();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_fake');
+// Configura Stripe con timeout e retry
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_fake', {
+  maxNetworkRetries: 3,
+  timeout: 30000, // 30 secondi
+  apiVersion: '2023-10-16',
+  telemetry: false
+});
+
+console.log('🔐 Stripe initialized with:');
+console.log('  - Max retries: 3');
+console.log('  - Timeout: 30s');
+console.log('  - Key format:', process.env.STRIPE_SECRET_KEY?.substring(0, 10) + '...');
 
 // ============== DONATION ENDPOINTS ==============
 
@@ -113,6 +124,33 @@ router.get('/top/donors', async (req, res) => {
 
 // ============== STRIPE PAYMENT ENDPOINTS ==============
 
+// TEST: Check Stripe connection
+router.get('/stripe/test-connection', async (req, res) => {
+  try {
+    console.log('🔗 Testing Stripe connection...');
+    const account = await stripe.account.retrieve();
+    console.log('✅ Stripe connection successful!');
+    res.status(200).json({
+      status: 'connected',
+      message: 'Successfully connected to Stripe',
+      account: account.id
+    });
+  } catch (error) {
+    console.error('❌ Stripe connection test failed:', error.message);
+    res.status(500).json({
+      status: 'disconnected',
+      error: error.message,
+      type: error.type,
+      suggestions: [
+        'Check internet connection',
+        'Verify STRIPE_SECRET_KEY is correct',
+        'Check firewall/proxy settings',
+        'Verify API key is active in Stripe dashboard'
+      ]
+    });
+  }
+});
+
 // Create payment intent for donation
 router.post('/stripe/create-intent', async (req, res) => {
   try {
@@ -179,6 +217,13 @@ router.post('/stripe/create-intent', async (req, res) => {
       raw: error.raw?.message || 'No raw message',
       param: error.param
     });
+
+    // Se è un errore di connessione, suggerisci il check della rete
+    if (error.type === 'StripeConnectionError') {
+      console.error('⚠️ Connection issue detected! Checking network...');
+      logger.warn('Stripe Connection Error - may be network/firewall issue');
+    }
+
     logger.error('Create payment intent error:', {
       message: error.message,
       type: error.type,
@@ -187,11 +232,16 @@ router.post('/stripe/create-intent', async (req, res) => {
       param: error.param
     });
     
-    res.status(error.statusCode || 500).json({ 
+    // Ritorna lo status code appropriato
+    const httpStatus = error.statusCode || 500;
+    res.status(httpStatus).json({ 
       error: error.message,
       type: error.type,
       code: error.code,
-      statusCode: error.statusCode
+      statusCode: httpStatus,
+      details: error.type === 'StripeConnectionError' ? 
+        'Network connection issue with Stripe. Check firewall/proxy settings.' : 
+        'Payment processing error'
     });
   }
 });
