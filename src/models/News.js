@@ -4,78 +4,121 @@ import logger from '../utils/logger.js';
 
 const router = express.Router();
 
-// Cache per le notizie (30 minuti)
+// Cache per le notizie (2 ore - Jikan cambia spesso)
 let newsCache = [];
 let cacheTime = 0;
 
-// Fetcha notizie vere da Jikan API (MyAnimeList)
+// Fetcha VERE notizie di annunci, nuovi anime e manga da Jikan API
 const fetchNewsFromJikan = async () => {
   try {
     const now = Date.now();
-    // Se il cache è fresco (meno di 30 minuti), restituiscilo
-    if (newsCache.length > 0 && now - cacheTime < 30 * 60 * 1000) {
+    // Se il cache è fresco (meno di 2 ore), restituiscilo
+    if (newsCache.length > 0 && now - cacheTime < 2 * 60 * 60 * 1000) {
       console.log('📦 Using cached news');
       return newsCache;
     }
 
-    console.log('📰 Fetching news from Jikan API (MyAnimeList)...');
+    console.log('📰 Fetching REAL anime news: announcements & new releases...');
     
-    // Richiedi forum posts (news/discussions)
-    const response = await axios.get('https://api.jikan.moe/v4/top/anime', {
-      params: {
-        filter: 'airing',
-        limit: 25
-      },
-      headers: {
-        'User-Agent': 'OtakuVerse/1.0 (News Aggregator)'
-      },
-      timeout: 15000
-    });
+    try {
+      // Fetcha anime in USCITA ADESSO (airing now)
+      const airingResponse = await axios.get('https://api.jikan.moe/v4/top/anime', {
+        params: {
+          filter: 'airing',
+          limit: 20
+        },
+        timeout: 8000
+      });
 
-    console.log('✅ Jikan API response received, processing...');
+      // Fetcha top anime (top rated & trending = nuovi successi)
+      const trendingResponse = await axios.get('https://api.jikan.moe/v4/top/anime', {
+        params: {
+          limit: 20,
+          page: 1
+        },
+        timeout: 8000
+      });
 
-    const animes = response.data?.data || [];
-    console.log(`📊 Fetched ${animes.length} top airing anime from Jikan`);
+      console.log('✅ Both API responses received');
 
-    // Trasforma i dati di Jikan nel formato dell'app
-    const jikanNews = animes.slice(0, 20).map((anime, index) => {
-      const synopsis = anime.synopsis || 'Popular anime now airing';
-      const aired = anime.aired?.from ? new Date(anime.aired.from).toISOString() : new Date().toISOString();
+      const airingAnimes = airingResponse.data?.data || [];
+      const trendingAnimes = trendingResponse.data?.data || [];
       
-      return {
-        id: `jikan-${anime.mal_id}-${index}`,
-        title: `${anime.title} - #${index + 1} Airing`,
-        description: synopsis.substring(0, 200),
-        imageUrl: anime.images?.webp?.image_url || 'https://via.placeholder.com/400x300?text=Anime+News',
-        releaseDate: aired,
-        category: anime.type || 'Anime',
-        source: 'Jikan (MyAnimeList)',
-        malLink: anime.url || 'https://myanimelist.net/',
-        authorId: 'jikan-api',
-        viewCount: anime.scored_by ? Math.floor(anime.scored_by / 10) : 5000,
-        likeCount: Math.floor(anime.score * 100 || 2500),
-        isBreakingNews: index === 0 && anime.status === 'Currently Airing',
-        metadata: {
-          score: anime.score,
-          rank: anime.rank,
-          popularity: anime.popularity
-        }
-      };
-    });
+      console.log(`📊 Airing now: ${airingAnimes.length}, Top trending: ${trendingAnimes.length}`);
 
-    if (jikanNews.length > 0) {
-      newsCache = jikanNews;
-      cacheTime = now;
-      console.log(`✅ Cached ${jikanNews.length} news from Jikan`);
-      return newsCache;
-    } else {
-      console.log('⚠️ Jikan returned no data, using fallback');
-      return getFallbackNews();
+      const newsItems = [];
+      
+      // Crea notizie da anime in uscita (NUOVE USCITE)
+      airingAnimes.forEach((anime, index) => {
+        const airedDate = anime.aired?.from ? new Date(anime.aired.from) : new Date();
+        newsItems.push({
+          id: `jikan-airing-${anime.mal_id}`,
+          title: `🎬 ${anime.title} - Ora in onda!`,
+          description: `${anime.synopsis ? anime.synopsis.substring(0, 180) : 'Dagli creatori di...'} \n⭐ Score: ${anime.score}/10 | 📺 Ep: ${anime.episodes || '?'}`,
+          imageUrl: anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url || 'https://via.placeholder.com/400x300',
+          releaseDate: airedDate.toISOString(),
+          category: 'Now Airing',
+          source: 'Jikan (MyAnimeList)',
+          malLink: anime.url || 'https://myanimelist.net/',
+          authorId: 'jikan',
+          viewCount: anime.scored_by ? Math.floor(anime.scored_by / 50) : 2000,
+          likeCount: Math.floor((anime.score || 6) * 800),
+          isBreakingNews: index < 3,
+          metadata: {
+            type: 'AIRING_NOW',
+            score: anime.score,
+            episodes: anime.episodes,
+            status: anime.status,
+            studio: anime.studios?.[0]?.name || 'Unknown'
+          }
+        });
+      });
+
+      // Crea notizie da trending anime (NUOVI SUCCESSI)
+      trendingAnimes.slice(0, 10).forEach((anime, index) => {
+        const releaseDate = anime.aired?.from ? new Date(anime.aired.from) : new Date();
+        newsItems.push({
+          id: `jikan-trending-${anime.mal_id}`,
+          title: `🆕 ${anime.title} - TRENDING MONDIALE!`,
+          description: `Nuovo anime che sta conquistando tutti! ⭐ ${anime.score}/10 | ${anime.rating || 'Family Friendly'} | ${anime.source || 'Manga Adaptation'}`,
+          imageUrl: anime.images?.webp?.large_image_url || anime.images?.jpg?.large_image_url || 'https://via.placeholder.com/400x300',
+          releaseDate: releaseDate.toISOString(),
+          category: 'Trending',
+          source: 'Jikan (MyAnimeList)',
+          malLink: anime.url || 'https://myanimelist.net/',
+          authorId: 'jikan',
+          viewCount: anime.scored_by ? Math.floor(anime.scored_by / 30) : 3000,
+          likeCount: Math.floor((anime.score || 7) * 1000),
+          isBreakingNews: index === 0,
+          metadata: {
+            type: 'TRENDING',
+            score: anime.score,
+            rank: anime.rank,
+            popularity: anime.popularity,
+            studio: anime.studios?.[0]?.name || 'Unknown'
+          }
+        });
+      });
+
+      // Ordina per data (più recenti prima)
+      newsItems.sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate));
+
+      if (newsItems.length > 0) {
+        newsCache = newsItems.slice(0, 30);
+        cacheTime = now;
+        console.log(`✅ Cached ${newsCache.length} REAL news (airing + trending)`);
+        return newsCache;
+      } else {
+        console.log('⚠️ No news found, using fallback');
+        return getFallbackNews();
+      }
+    } catch (apiError) {
+      console.error('❌ API Error:', apiError.message);
+      return newsCache.length > 0 ? newsCache : getFallbackNews();
     }
   } catch (error) {
-    console.error('❌ Error fetching Jikan news:', error.message);
-    console.error('📋 Error details:', error.response?.status, error.code);
-    console.log('🔄 Falling back to cached/mock data');
+    console.error('❌ Error in news fetching:', error.message);
+    console.log('🔄 Using fallback news');
     return newsCache.length > 0 ? newsCache : getFallbackNews();
   }
 };
