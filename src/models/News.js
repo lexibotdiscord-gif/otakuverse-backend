@@ -110,7 +110,7 @@ const getFallbackNews = () => {
   ];
 };
 
-// ============== NEWS ENDPOINTS ==============
+// ============== NEWS ENDPOINT ==============
 
 // Get all news with pagination
 router.get('/', async (req, res) => {
