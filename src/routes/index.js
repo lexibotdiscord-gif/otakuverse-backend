@@ -2,6 +2,7 @@ import express from 'express';
 import authRoutes from './auth.js';
 import newsRoutes from './news.js';
 import animeRoutes from './anime.js';
+import searchRoutes from './search.js';
 import userRoutes from './user.js';
 import donationRoutes from './donation.js';
 import communityRoutes from './community.js';
@@ -14,6 +15,9 @@ const setupRoutes = (app) => {
 
   // News routes
   router.use('/news', newsRoutes);
+
+  // Search routes
+  router.use('/search', searchRoutes);
 
   // Anime routes
   router.use('/anime', animeRoutes);
