@@ -162,7 +162,7 @@ router.get('/', async (req, res) => {
       try {
         const animeResponse = await fetchWithRetry('https://api.jikan.moe/v4/anime', {
           params: {
-            query: q.trim(),
+            q: q.trim(),
             limit: Math.min(limit, 25),
             page: parseInt(page)
           }
@@ -180,7 +180,7 @@ router.get('/', async (req, res) => {
       try {
         const mangaResponse = await fetchWithRetry('https://api.jikan.moe/v4/manga', {
           params: {
-            query: q.trim(),
+            q: q.trim(),
             limit: Math.min(limit, 25),
             page: parseInt(page)
           }
@@ -264,7 +264,7 @@ router.get('/anime', async (req, res) => {
     console.log(`🔍 Advanced anime search: "${q}" (filters: status=${status}, type=${type}, genre=${genre}, year=${year})`);
 
     const params = {
-      query: q.trim(),
+      q: q.trim(),
       limit: Math.min(limit, 25),
       page: parseInt(page)
     };
@@ -338,7 +338,7 @@ router.get('/manga', async (req, res) => {
     console.log(`🔍 Advanced manga search: "${q}" (filters: status=${status}, type=${type}, genre=${genre}, year=${year})`);
 
     const params = {
-      query: q.trim(),
+      q: q.trim(),
       limit: Math.min(limit, 25),
       page: parseInt(page)
     };
