@@ -8,6 +8,55 @@ const router = express.Router();
 const searchCache = new Map();
 const CACHE_DURATION = 30 * 60 * 1000;
 
+// Per tracciare l'ultima richiesta a Jikan e evitare rate limit
+let lastJikanRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 500; // 500ms tra richieste a Jikan
+
+/**
+ * Funzione di retry con exponential backoff per Jikan API
+ */
+const fetchWithRetry = async (url, config = {}, maxRetries = 3) => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Aspetta un minimo di intervallo tra richieste a Jikan
+      const now = Date.now();
+      const timeSinceLastRequest = now - lastJikanRequestTime;
+      if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        await new Promise(resolve => 
+          setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest)
+        );
+      }
+      lastJikanRequestTime = Date.now();
+
+      const response = await axios.get(url, {
+        ...config,
+        timeout: 10000
+      });
+      return response;
+    } catch (error) {
+      // Se è 429 (rate limit), retry con backoff
+      if (error.response?.status === 429) {
+        const delayMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        console.log(`⏰ Rate limit hit (429), retrying in ${delayMs}ms... (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      
+      // Per altri errori, retry solo se timeout or transient error
+      if (attempt < maxRetries - 1 && 
+          (error.code === 'ECONNABORTED' || error.code === 'ECONNRESET')) {
+        const delayMs = Math.pow(2, attempt) * 500;
+        console.log(`🔄 Transient error, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      
+      // Se è l'ultimo tentativo, lancia l'errore
+      throw error;
+    }
+  }
+};
+
 /**
  * Formatta i dati anime per il frontend
  */
@@ -111,13 +160,12 @@ router.get('/', async (req, res) => {
     // Cerca anime
     if (type === 'all' || type === 'anime') {
       try {
-        const animeResponse = await axios.get('https://api.jikan.moe/v4/anime', {
+        const animeResponse = await fetchWithRetry('https://api.jikan.moe/v4/anime', {
           params: {
             query: q.trim(),
             limit: Math.min(limit, 25),
             page: parseInt(page)
-          },
-          timeout: 10000
+          }
         });
 
         const animeData = (animeResponse.data?.data || []).map(formatAnimeData);
@@ -130,13 +178,12 @@ router.get('/', async (req, res) => {
     // Cerca manga
     if (type === 'all' || type === 'manga') {
       try {
-        const mangaResponse = await axios.get('https://api.jikan.moe/v4/manga', {
+        const mangaResponse = await fetchWithRetry('https://api.jikan.moe/v4/manga', {
           params: {
             query: q.trim(),
             limit: Math.min(limit, 25),
             page: parseInt(page)
-          },
-          timeout: 10000
+          }
         });
 
         const mangaData = (mangaResponse.data?.data || []).map(formatMangaData);
@@ -229,9 +276,8 @@ router.get('/anime', async (req, res) => {
     if (minScore) params.min_score = parseFloat(minScore);
     if (orderBy) params.order_by = orderBy; // score, title, airing, type, episodes, start_date
 
-    const response = await axios.get('https://api.jikan.moe/v4/anime', {
-      params,
-      timeout: 10000
+    const response = await fetchWithRetry('https://api.jikan.moe/v4/anime', {
+      params
     });
 
     const animeData = (response.data?.data || []).map(formatAnimeData);
@@ -304,9 +350,8 @@ router.get('/manga', async (req, res) => {
     if (minScore) params.min_score = parseFloat(minScore);
     if (orderBy) params.order_by = orderBy;
 
-    const response = await axios.get('https://api.jikan.moe/v4/manga', {
-      params,
-      timeout: 10000
+    const response = await fetchWithRetry('https://api.jikan.moe/v4/manga', {
+      params
     });
 
     const mangaData = (response.data?.data || []).map(formatMangaData);
@@ -351,9 +396,7 @@ router.get('/:type/:id/details', async (req, res) => {
     }
 
     const endpoint = type.toLowerCase();
-    const response = await axios.get(`https://api.jikan.moe/v4/${endpoint}/${id}`, {
-      timeout: 10000
-    });
+    const response = await fetchWithRetry(`https://api.jikan.moe/v4/${endpoint}/${id}`);
 
     const data = response.data?.data;
     if (!data) {
