@@ -113,12 +113,17 @@ app.use(errorHandler);
 
 const startServer = async () => {
   try {
+    console.log('\n🔄 Starting OtakuVerse Backend...\n');
     await connectDB();
     
     app.listen(PORT, () => {
+      console.log('\n✅ ═══════════════════════════════════════════');
+      console.log('✅ OtakuVerse Backend Connected & Running!');
+      console.log('✅ ═══════════════════════════════════════════\n');
       logger.info(`🚀 OtakuVerse Backend started at port ${PORT}`);
       logger.info(`📡 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🔗 API URL: ${process.env.API_URL || `http://localhost:${PORT}`}`);
+      logger.info(`📊 Database: ${process.env.DB_HOST ? 'MySQL' : 'MongoDB'}`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
