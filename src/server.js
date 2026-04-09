@@ -8,6 +8,7 @@ import setupRoutes from './routes/index.js';
 import errorHandler from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import rateLimiter from './middleware/rateLimiter.js';
+import { connectDB as connectMySQL } from './utils/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,16 +43,27 @@ app.use(rateLimiter);
 // ============== DATABASE CONNECTION ==============
 
 const connectDB = async () => {
+  // Se è configurato MySQL, usa quello, altrimenti usa MongoDB
+  if (process.env.DB_HOST) {
+    logger.info('📊 Connecting to MySQL...');
+    const connected = await connectMySQL();
+    if (connected) {
+      logger.info('✅ MySQL connected successfully');
+      return;
+    }
+  }
+
+  // Fallback a MongoDB
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      dbName: process.env.DB_NAME,
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/otakuverse', {
+      dbName: process.env.DB_NAME || 'otakuverse',
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
     logger.info('✅ MongoDB connected successfully');
   } catch (error) {
-    logger.warn('⚠️ MongoDB connection failed:', error.message);
-    logger.warn('Running without database - mock mode enabled');
+    logger.warn('⚠️ Database connection failed:', error.message);
+    logger.warn('⚠️ Running without database - mock mode enabled');
   }
 };
 
