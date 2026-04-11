@@ -4,6 +4,12 @@ import logger from './logger.js';
 
 dotenv.config();
 
+console.log('🔍 Database Config:');
+console.log('  DB_HOST:', process.env.DB_HOST);
+console.log('  DB_PORT:', process.env.DB_PORT);
+console.log('  DB_NAME:', process.env.DB_NAME);
+console.log('  DB_USER:', process.env.DB_USER);
+
 const sequelize = new Sequelize(
   process.env.DB_NAME || 'otakuverse',
   process.env.DB_USER || 'otakuverse',
@@ -24,10 +30,13 @@ const sequelize = new Sequelize(
 
 export const connectDB = async () => {
   try {
+    console.log('📊 Attempting MySQL connection...');
     await sequelize.authenticate();
+    console.log('✅ MySQL connected successfully');
     logger.info('✅ MySQL connected successfully');
     return true;
   } catch (error) {
+    console.log('❌ MySQL connection failed:', error.message);
     logger.error('❌ MySQL connection failed:', error.message);
     return false;
   }
